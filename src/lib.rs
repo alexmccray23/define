@@ -1,5 +1,3 @@
-// https://dictionaryapi.com/api/v3/references/collegiate/json/test?key=${DICTIONARY_API_KEY}
-
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use serde_json::Value;
@@ -21,11 +19,11 @@ pub struct DictEntry {
     hwi: Hwi,
 
     /// Functional label (part of speech: noun, verb, adjective, etc.)
-    pub fl: String,
+    fl: String,
 
     /// Simple array of up to 3 definitions (easiest to use)
     #[serde(default)]
-    pub shortdef: Vec<String>,
+    shortdef: Vec<String>,
 
     /// Full definition structure (complex nested format)
     /// Reserved for future use when we need examples, sense numbers, etc.
@@ -34,11 +32,15 @@ pub struct DictEntry {
 
     /// Undefined run-ons (related words derived from main entry)
     #[serde(default)]
-    uros: Vec<UndefinedRunOn>,
+    uros: Option<Vec<UndefinedRunOn>>,
 
     /// Etymology
     #[serde(default)]
-    et: Vec<Vec<Value>>,
+    et: Option<Vec<Vec<Value>>>,
+
+    /// Etymology
+    #[serde(default)]
+    target: Option<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,13 +50,22 @@ struct Meta {
     uuid: String,
 
     /// Alphabetical sort key
-    sort: String,
+    #[serde(default)]
+    sort: Option<String>,
 
-    /// Source dictionary
+    /// Source reference
     src: String,
 
     /// All searchable forms of this word
     stems: Vec<String>,
+
+    /// Synonyms
+    #[serde(default)]
+    syns: Option<Vec<Vec<String>>>,
+
+    /// Antonyms
+    #[serde(default)]
+    ants: Option<Vec<Vec<String>>>,
 
     /// Whether this entry contains offensive content
     offensive: bool,
@@ -68,7 +79,7 @@ struct Hwi {
 
     /// Pronunciations (Merriam-Webster format + audio files)
     #[serde(default)]
-    prs: Vec<Pronunciation>,
+    prs: Option<Vec<Pronunciation>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -136,18 +147,57 @@ impl DictEntry {
         }
     }
 
-    /// Word extraction helper
+    /// Get a formatted string of all synonyms for display
+    #[must_use]
+    pub fn format_synonyms(&self) -> String {
+        if let Some(ref syns) = self.meta.syns && !syns.is_empty() {
+            let mut result = String::new();
+            for (i, syn) in syns[0].iter().enumerate() {
+                if i > 0 {
+                    write!(result, ", {syn}").unwrap();
+                } else {
+                    write!(result, "{syn}", ).unwrap();
+                }
+            }
+            result
+        } else {
+            String::from("(No synonyms available)")
+        }
+    }
+
+    /// Get a formatted string of all antonyms for display
+    #[must_use]
+    pub fn format_antonyms(&self) -> String {
+        if let Some(ref ants) = self.meta.ants && !ants.is_empty() {
+            let mut result = String::new();
+            for (i, ant) in ants[0].iter().enumerate() {
+                if i > 0 {
+                    write!(result, ", {ant}").unwrap();
+                } else {
+                    write!(result, "{ant}", ).unwrap();
+                }
+            }
+            result
+        } else {
+            String::from("(No antonyms available)")
+        }
+    }
+
+    /// Returns dictionary word
     #[must_use]
     pub fn word(&self) -> String {
-        self.meta.id.clone()
+        self.hwi.hw.replace('*', "")
+    }
+    /// Returns functional label/part of speech, (e.g., noun, verb, etc)
+    #[must_use]
+    pub fn fl(&self) -> String {
+        self.fl.clone()
     }
 }
 
 // ============================================================================
 // API Client
 // ============================================================================
-
-const API_BASE_URL: &str = "https://dictionaryapi.com/api/v3/references/collegiate/json";
 
 /// Fetch dictionary entries from Merriam-Webster API
 ///
@@ -156,8 +206,8 @@ const API_BASE_URL: &str = "https://dictionaryapi.com/api/v3/references/collegia
 /// This function will return an error if:
 /// - The dictionary API is unavailable or the API request fails
 /// - The received JSON data could not be parsed into Vec<DictEntry>
-pub async fn fetch_definition(word: &str, api_key: &str) -> Result<Vec<DictEntry>> {
-    let url = format!("{API_BASE_URL}/{word}?key={api_key}");
+pub async fn fetch_definition(word: &str, api_key: &str, api_url: &str) -> Result<Vec<DictEntry>> {
+    let url = format!("{api_url}/{word}?key={api_key}");
 
     let response = reqwest::Client::new()
         .get(&url)

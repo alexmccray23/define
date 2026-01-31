@@ -5,9 +5,8 @@ use tokio::fs;
 
 use define::{fetch_definition, get_word, send_notification};
 
-// ============================================================================
-// Main
-// ============================================================================
+// https://dictionaryapi.com/api/v3/references/thesaurus/json/test?key=${THESAURUS_API_KEY}
+const THESAURUS_API_URL: &str = "https://dictionaryapi.com/api/v3/references/thesaurus/json";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -15,13 +14,13 @@ async fn main() -> Result<()> {
     let api_key = if let Ok(contents) = fs::read_to_string("/home/alexm/.env").await {
         contents
             .lines()
-            .find(|line| line.contains("DICTIONARY_API_KEY="))
+            .find(|line| line.contains("THESAURUS_API_KEY="))
             .and_then(|line| line.split_once('='))
             .map(|(_, value)| value.trim().to_string())
-            .context("DICTIONARY_API_KEY not found in ~/.env")?
+            .context("THESAURUS_API_KEY not found in ~/.env")?
     } else {
-        env::var("DICTIONARY_API_KEY")
-            .context("DICTIONARY_API_KEY not set in ~/.env or environment")?
+        env::var("THESAURUS_API_KEY")
+            .context("THESAURUS_API_KEY not set in ~/.env or environment")?
     };
 
     // Get word from command line argument or clipboard
@@ -33,12 +32,13 @@ async fn main() -> Result<()> {
     }
 
     // Fetch definitions
-    let entries = fetch_definition(&word, &api_key).await?;
+    let entries = fetch_definition(&word, &api_key, THESAURUS_API_URL).await?;
 
     // Format all definitions for display
     let mut definitions = String::new();
     for entry in &entries {
-        writeln!(definitions, "\n{}{}", entry.fl, entry.format_definitions())?;
+        writeln!(definitions, "\nSynonyms: {}", entry.format_synonyms())?;
+        writeln!(definitions, "\nAntonyms: {}", entry.format_antonyms())?;
     }
 
     // Send notification

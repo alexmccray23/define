@@ -3,9 +3,7 @@ use std::env;
 use std::fmt::Write;
 use tokio::fs;
 
-use define::{fetch_definition, get_word, send_notification, DictEntry};
-
-
+use define::{fetch_definition, get_word, send_notification};
 
 // ============================================================================
 // Main

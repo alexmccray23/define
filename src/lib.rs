@@ -150,6 +150,12 @@ impl DictEntry {
 const API_BASE_URL: &str = "https://dictionaryapi.com/api/v3/references/collegiate/json";
 
 /// Fetch dictionary entries from Merriam-Webster API
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The dictionary API is unavailable or the API request fails
+/// - The received JSON data could not be parsed into Vec<DictEntry>
 pub async fn fetch_definition(word: &str, api_key: &str) -> Result<Vec<DictEntry>> {
     let url = format!("{API_BASE_URL}/{word}?key={api_key}");
 
@@ -191,6 +197,11 @@ pub async fn fetch_definition(word: &str, api_key: &str) -> Result<Vec<DictEntry
 // ============================================================================
 
 /// Get word from command line args or clipboard
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - No word was provided and the clipboard is empty
 pub async fn get_word() -> Result<String> {
     // Try command line argument first
     if let Some(word) = env::args().nth(1) {
@@ -242,6 +253,11 @@ pub async fn get_word() -> Result<String> {
 // ============================================================================
 
 /// Send desktop notification with the definition
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The `notify-send` command is unavailable or fails to run.
 pub async fn send_notification(word: &str, definitions: &str) -> Result<()> {
     let status = tokio::process::Command::new("notify-send")
         .args([

@@ -6,7 +6,7 @@ use tokio::fs;
 use define::{fetch_definition, get_word, send_notification};
 
 // https://dictionaryapi.com/api/v3/references/collegiate/json/test?key=${DICTIONARY_API_KEY}
-const DICTIONARY_API_URL: &str = "https://dictionaryapi.com/api/v3/references/collegiate/json";
+const DICTIONARY_BASE_URL: &str = "https://dictionaryapi.com/api/v3/references/collegiate/json";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -32,7 +32,7 @@ async fn main() -> Result<()> {
     }
 
     // Fetch definitions
-    let entries = fetch_definition(&word, &api_key, DICTIONARY_API_URL).await?;
+    let entries = fetch_definition(&word, &api_key, DICTIONARY_BASE_URL).await?;
 
     // Format all definitions for display
     let mut definitions = String::new();

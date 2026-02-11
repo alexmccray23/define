@@ -153,10 +153,10 @@ impl DictEntry {
         if let Some(ref syns) = self.meta.syns && !syns.is_empty() {
             let mut result = String::new();
             for (i, syn) in syns[0].iter().enumerate() {
-                if i > 0 {
-                    write!(result, ", {syn}").unwrap();
-                } else {
+                if i == 0 {
                     write!(result, "{syn}", ).unwrap();
+                } else {
+                    write!(result, ", {syn}").unwrap();
                 }
             }
             result
@@ -171,10 +171,10 @@ impl DictEntry {
         if let Some(ref ants) = self.meta.ants && !ants.is_empty() {
             let mut result = String::new();
             for (i, ant) in ants[0].iter().enumerate() {
-                if i > 0 {
-                    write!(result, ", {ant}").unwrap();
-                } else {
+                if i == 0 {
                     write!(result, "{ant}", ).unwrap();
+                } else {
+                    write!(result, ", {ant}").unwrap();
                 }
             }
             result

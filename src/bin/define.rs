@@ -1,7 +1,6 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use std::env;
 use std::fmt::Write;
-use tokio::fs;
 
 use define::{fetch_definition, get_word, send_notification};
 
@@ -10,18 +9,7 @@ const DICTIONARY_BASE_URL: &str = "https://dictionaryapi.com/api/v3/references/c
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Get API key from ~/.env file or environment variable
-    let api_key = if let Ok(contents) = fs::read_to_string("/home/alexm/.env").await {
-        contents
-            .lines()
-            .find(|line| line.contains("DICTIONARY_API_KEY="))
-            .and_then(|line| line.split_once('='))
-            .map(|(_, value)| value.trim().to_string())
-            .context("DICTIONARY_API_KEY not found in ~/.env")?
-    } else {
-        env::var("DICTIONARY_API_KEY")
-            .context("DICTIONARY_API_KEY not set in ~/.env or environment")?
-    };
+    let api_key = env!("DICTIONARY_API_KEY");
 
     // Get word from command line argument or clipboard
     let word = get_word().await?;

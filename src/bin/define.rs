@@ -20,14 +20,14 @@ async fn main() -> Result<()> {
     }
 
     // Fetch definitions
-    let entries = fetch_definition(&word, &api_key, DICTIONARY_BASE_URL).await?;
+    let entries = fetch_definition(&word, api_key, DICTIONARY_BASE_URL).await?;
 
     // Format all definitions for display
     let mut definitions = String::new();
     for entry in &entries {
         writeln!(
             definitions,
-            "\n{}{}",
+            "\n{}: {}",
             entry.fl(),
             entry.format_definitions()
         )?;

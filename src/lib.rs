@@ -107,9 +107,114 @@ struct Sound {
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct DefSection {
-    /// Nested array: [`sense_group`][sense_item][type, data]
-    /// Example: [[[["sense", {dt: [...]}]]]]
+    /// Optional grammatical label dividing verb senses (e.g., "transitive verb")
+    #[serde(default)]
+    vd: Option<String>,
+
+    /// Sense sequences: sseq[group][item] = [`type_tag`, `sense_data`]
+    /// `type_tag` is one of: "sense", "bs" (binding substitute), "pseq" (parenthetical seq)
     sseq: Vec<Vec<Vec<Value>>>,
+}
+
+impl DefSection {
+    /// Extract all plain-text definitions from this section's sense sequences.
+    fn definitions(&self) -> Vec<String> {
+        let mut defs = Vec::new();
+        for sense_seq in &self.sseq {
+            for sense_item in sense_seq {
+                collect_sense_defs(sense_item, &mut defs);
+            }
+        }
+        defs
+    }
+}
+
+/// Recursively collect definition strings from a `[type_tag, data]` sense item.
+fn collect_sense_defs(sense_item: &[Value], defs: &mut Vec<String>) {
+    if sense_item.len() < 2 {
+        return;
+    }
+    match sense_item[0].as_str() {
+        Some("sense") => {
+            if let Some(text) = extract_dt_text(&sense_item[1]) {
+                defs.push(text);
+            }
+        }
+        Some("bs") => {
+            // Binding substitute: { "sense": { "sn": ..., "dt": [...] } }
+            if let Some(inner) = sense_item[1].get("sense")
+                && let Some(text) = extract_dt_text(inner)
+            {
+                defs.push(text);
+            }
+        }
+        Some("pseq") => {
+            // Parenthetical sense sequence: nested Vec<Vec<[tag, data]>>
+            if let Some(groups) = sense_item[1].as_array() {
+                for group in groups {
+                    if let Some(items) = group.as_array() {
+                        for item in items {
+                            if let Some(arr) = item.as_array() {
+                                collect_sense_defs(arr, defs);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Pull the first "text" entry out of a sense's `dt` array and strip MW markup.
+fn extract_dt_text(sense_data: &Value) -> Option<String> {
+    let dt = sense_data.get("dt")?.as_array()?;
+    for item in dt {
+        let pair = item.as_array()?;
+        if pair.first().and_then(Value::as_str) == Some("text")
+            && let Some(raw) = pair.get(1).and_then(Value::as_str)
+        {
+            return Some(strip_mw_markup(raw));
+        }
+    }
+    None
+}
+
+/// Strip Merriam-Webster inline markup tokens from definition text.
+///
+/// Handles tokens like `{bc}` (bold colon → ": "), `{it}`/`{/it}` (italic markers,
+/// removed), `{ldquo}`/`{rdquo}` (typographic quotes), and cross-reference tokens
+/// like `{sx|word||}` (synonym cross-reference → the word itself).
+fn strip_mw_markup(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '{' {
+            result.push(ch);
+            continue;
+        }
+        let mut tag = String::new();
+        for c in chars.by_ref() {
+            if c == '}' {
+                break;
+            }
+            tag.push(c);
+        }
+        match tag.as_str() {
+            "ldquo" => result.push('\u{201C}'),
+            "rdquo" => result.push('\u{201D}'),
+            // Formatting markers with no plain-text equivalent
+            "it" | "/it" | "b" | "/b" | "sc" | "/sc" | "inf" | "/inf" | "sup" | "/sup" | "bc" => {}
+            // Cross-reference tokens: {type|display_word|...} → display_word
+            _ => {
+                if let Some(word) = tag.split('|').nth(1) {
+                    result.push_str(word);
+                }
+                // Unknown bare tags (no '|') are silently dropped
+            }
+        }
+    }
+    result
 }
 
 #[derive(Debug, Deserialize)]
@@ -127,34 +232,41 @@ struct UndefinedRunOn {
 // ============================================================================
 
 impl DictEntry {
-    /// Get a formatted string of all definitions for display
-    /// Currently uses shortdef, but can be extended to parse full def structure
+    /// Get a formatted string of all definitions for display.
+    ///
+    /// Prefers the full `def` structure (which contains all senses) over `shortdef`
+    /// (which is capped at three). Falls back to `shortdef` if `def` yields nothing.
     #[must_use]
     pub fn format_definitions(&self) -> String {
-        if self.shortdef.is_empty() {
-            // Fallback: could implement full def parsing here in the future
-            String::from("(No definitions available)")
+        // Collect from full def sections first
+        let from_def: Vec<String> = self.def.iter().flat_map(DefSection::definitions).collect();
+
+        let defs: &[String] = if !from_def.is_empty() {
+            &from_def
+        } else if !self.shortdef.is_empty() {
+            &self.shortdef
         } else {
-            // Simple format using shortdef - use write! to avoid intermediate allocations
-            let mut result = String::new();
-            for (i, def) in self.shortdef.iter().enumerate() {
-                if i > 0 {
-                    result.push('\n');
-                }
-                write!(result, ". {def}").unwrap();
-            }
-            result
+            return String::from("(No definitions available)");
+        };
+
+        let mut result = String::new();
+        for def in defs {
+            result.push('\n');
+            write!(result, "• {def}").unwrap();
         }
+        result
     }
 
     /// Get a formatted string of all synonyms for display
     #[must_use]
     pub fn format_synonyms(&self) -> String {
-        if let Some(ref syns) = self.meta.syns && !syns.is_empty() {
+        if let Some(ref syns) = self.meta.syns
+            && !syns.is_empty()
+        {
             let mut result = String::new();
             for (i, syn) in syns[0].iter().enumerate() {
                 if i == 0 {
-                    write!(result, "{syn}", ).unwrap();
+                    write!(result, "{syn}",).unwrap();
                 } else {
                     write!(result, ", {syn}").unwrap();
                 }
@@ -168,11 +280,13 @@ impl DictEntry {
     /// Get a formatted string of all antonyms for display
     #[must_use]
     pub fn format_antonyms(&self) -> String {
-        if let Some(ref ants) = self.meta.ants && !ants.is_empty() {
+        if let Some(ref ants) = self.meta.ants
+            && !ants.is_empty()
+        {
             let mut result = String::new();
             for (i, ant) in ants[0].iter().enumerate() {
                 if i == 0 {
-                    write!(result, "{ant}", ).unwrap();
+                    write!(result, "{ant}",).unwrap();
                 } else {
                     write!(result, ", {ant}").unwrap();
                 }
@@ -313,7 +427,7 @@ pub async fn send_notification(word: &str, definitions: &str) -> Result<()> {
         .args([
             "-t",
             "60000", // 60 second timeout
-            &format!("{word} -"),
+            word,
             definitions,
         ])
         .status()

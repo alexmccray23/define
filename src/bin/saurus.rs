@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     }
 
     // Fetch definitions
-    let entries = fetch_definition(&word, &api_key, THESAURUS_BASE_URL).await?;
+    let entries = fetch_definition(&word, api_key, THESAURUS_BASE_URL).await?;
 
     // Format all definitions for display
     let mut definitions = String::new();
